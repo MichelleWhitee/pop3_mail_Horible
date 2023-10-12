@@ -20,7 +20,7 @@ class MainWindow(QMainWindow, uiMainWindow):
 
         self.deleted = []
 
-        self.pageSize = 5
+        self.pageSize = 10
         self.currentPage = 1
 
         self.numMessages = 0
@@ -44,11 +44,16 @@ class MainWindow(QMainWindow, uiMainWindow):
     def rset_clicked(self):
         try:
             self.pop_conn.rset()
-            for item in self.deleted:
-                item.setForeground(Qt.black)
-                print("Пометки сняты")
 
-                self.deleted.clear()
+            try:
+                for item in self.deleted:
+                    item.setForeground(Qt.black)
+            except Exception as e:
+                print(f"Не удалось изменить цвет {e}")
+
+            self.deleted.clear()
+            print("Пометки сняты")
+
         except Exception as e:
             print(f"Не удалось снять пометки на удаление: {e}")
 
@@ -90,6 +95,8 @@ class MainWindow(QMainWindow, uiMainWindow):
             if self.pop_conn and self.pop_conn.noop():
                 print("pop quit")
                 self.pop_conn.quit()
+            else:
+                event.ignore()
         else:
             event.ignore()
 
@@ -104,7 +111,8 @@ class MainWindow(QMainWindow, uiMainWindow):
 
             self.currentPage = nextP
 
-            for i in range(self.currentPage, self.currentPage + self.pageSize - 1):
+            print("Page - " + str(self.currentPage))
+            for i in range(self.currentPage, self.currentPage + self.pageSize):
                 #print(i)
                 try:
                     response, msgData, octets = self.pop_conn.retr(i)
@@ -132,18 +140,22 @@ class MainWindow(QMainWindow, uiMainWindow):
 
             self.currentPage = nextP
 
+            print("Page - " + str(self.currentPage))
             for i in range(self.currentPage, self.currentPage + self.pageSize):
                 #print(i)
-                response, msgData, octets = self.pop_conn.retr(i)
-                messageText = b'\n'.join(msgData).decode('utf-8')
-                emailMessage = Parser().parsestr(messageText)
-                body = f'{i}: '
-                for part in emailMessage.walk():
-                    if part.get_content_type() == "text/plain":
-                        body += part.get_payload(decode=True).decode('utf-8')
+                try:
+                    response, msgData, octets = self.pop_conn.retr(i)
+                    messageText = b'\n'.join(msgData).decode('utf-8')
+                    emailMessage = Parser().parsestr(messageText)
+                    body = f'{i}: '
+                    for part in emailMessage.walk():
+                        if part.get_content_type() == "text/plain":
+                            body += part.get_payload(decode=True).decode('utf-8')
 
-                item = QListWidgetItem(body)
-                self.listWidget.addItem(item)
+                    item = QListWidgetItem(body)
+                    self.listWidget.addItem(item)
+                except Exception as e:
+                    pass
         else:
             print("prev err")
 
@@ -192,29 +204,35 @@ class MainWindow(QMainWindow, uiMainWindow):
         if not self.connectStatus:
             print("xui")
         else:
+            self.pop_conn.noop()
             self.listWidget.clear()
 
             self.numMessages = len(self.pop_conn.list()[1])
             print(f"Всего писем в почтовом ящике: {self.numMessages}\n")
 
-            if self.numMessages < self.pageSize:
-                itemsNum = self.numMessages
-            else:
-                itemsNum = self.pageSize
-
-            for i in range(self.currentPage, itemsNum + 1):
+            print("Page - " + str(self.currentPage))
+            for i in range(self.currentPage, self.currentPage + self.pageSize):
                 #print(i)
-                response, msgData, octets = self.pop_conn.retr(i)
-                messageText = b'\n'.join(msgData).decode('utf-8')
-                emailMessage = Parser().parsestr(messageText)
-                body = f'{i}: '
-                for part in emailMessage.walk():
-                    if part.get_content_type() == "text/plain":
-                        body += part.get_payload(decode=True).decode('utf-8')
+                try:
+                    response, msgData, octets = self.pop_conn.retr(i)
+                    messageText = b'\n'.join(msgData).decode('koi8-r')
+                    emailMessage = Parser().parsestr(messageText)
+                    #print(emailMessage)
+                    body = f'{i}: '
+                    for part in emailMessage.walk():
+                        if part.get_content_type() == "text/plain":
+                            print("founded")
+                            body += part.get_payload(decode=True).decode('koi8-r')
 
-                item = QListWidgetItem(body)
-                print(f"VOT-{body}")
-                self.listWidget.addItem(item)
+                    #print(body)
+                    item = QListWidgetItem(body)
+                    #print(f"VOT-{body}")
+                    self.listWidget.addItem(item)
+                except Exception as e:
+                    if 'message does not exist' in str(e):
+                        item = QListWidgetItem("<deleted>")
+                        self.listWidget.addItem(item)
+                    print(e)
 
                 #print(f"Письмо {i}:\n{body}\n{'-' * 50}")
 
